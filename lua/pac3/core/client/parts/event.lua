@@ -34,6 +34,15 @@ BUILDER:StartStorableVars()
 	BUILDER:GetSetPart("TargetPart")
 BUILDER:EndStorableVars()
 
+function PART:SetEvent(event)
+	local reset = (self.Arguments == "") or 
+	(self.Arguments ~= "" and self.Event ~= "" and self.Event ~= event)
+
+	self.Event = event
+	self:SetWarning()
+	self:GetDynamicProperties(reset) 
+end
+
 local function get_default(typ)
 	if typ == "string" then
 		return ""
@@ -61,10 +70,9 @@ local function cast(typ, val)
 	return string_to_type(typ, val)
 end
 
-function PART:GetDynamicProperties()
+function PART:GetDynamicProperties(reset_to_default)
 	local data = self.Events[self.Event]
 	if not data then return end
-	self:SetWarning()
 
 	local tbl = {}
 	for pos, arg in ipairs(data:GetArguments()) do
@@ -85,6 +93,15 @@ function PART:GetDynamicProperties()
 			end,
 			udata = udata,
 		}
+
+		local arg = tbl[key]
+		if arg.get() == nil or reset_to_default then 
+			if udata.default then 
+				arg.set(udata.default)
+			else
+				arg.set(nil)
+			end
+		end
 	end
 
 	return tbl
@@ -806,6 +823,16 @@ PART.OldEvents = {
 
 	command = {
 		arguments = {{find = "string"}, {time = "number"}, {hide_in_eventwheel = "boolean"}},
+		userdata = {
+			{default = "change_me", editor_friendly = "CommandName"}, 
+			{default = 0.1, editor_friendly = "EventDuration"}, 
+			{default = false, group = "event wheel", editor_friendly = "HideInEventWheel"}
+		},
+		nice = function(self, ent, find, time)
+			find = find or "?"
+			time = time or "?"
+			return "command: " .. find .. " | " .. "duration: " .. time
+		end,
 		callback = function(self, ent, find, time)
 			time = time or 0.1
 
@@ -1115,6 +1142,44 @@ PART.OldEvents = {
 			return 0
 		end,
 	},
+
+	flat_dot_forward = {
+		arguments = {{normal = "number"}},
+		callback = function(self, ent, normal)
+			local owner = self:GetRootPart():GetOwner()
+
+			if owner:IsValid() then
+				local ang = owner:EyeAngles()
+				ang.p = 0
+				ang.r = 0
+				local dir = pac.EyePos - owner:EyePos()
+				dir[3] = 0
+				dir:Normalize()
+				return self:NumberOperator(dir:Dot(ang:Forward()), normal)
+			end
+
+			return 0
+		end
+	},
+
+	flat_dot_right = {
+		arguments = {{normal = "number"}},
+		callback = function(self, ent, normal)
+			local owner = self:GetRootPart():GetOwner()
+
+			if owner:IsValid() then
+				local ang = owner:EyeAngles()
+				ang.p = 0
+				ang.r = 0
+				local dir = pac.EyePos - owner:EyePos()
+				dir[3] = 0
+				dir:Normalize()
+				return self:NumberOperator(dir:Dot(ang:Right()), normal)
+			end
+
+			return 0
+		end
+	}
 }
 
 do
@@ -1440,6 +1505,7 @@ do
 					local part = pac.GetPartFromUniqueID(pac.Hash(ent), animation)
 					if not IsValid(part) then return end
 					local frame, delta = animations.GetEntityAnimationFrame(ent, part:GetAnimID())
+					if not frame or not delta then return end -- different animation part is playing
 					return frame >= frame_start and frame <= frame_end
 				end
 			end

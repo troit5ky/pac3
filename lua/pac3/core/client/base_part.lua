@@ -16,6 +16,7 @@ local table_insert = table.insert
 local BUILDER, PART = pac.PartTemplate()
 
 PART.ClassName = "base"
+PART.BaseName = PART.ClassName
 
 function PART:__tostring()
 	return string_format("part[%s][%s][%i]", self.ClassName, self:GetName(), self.Id)
@@ -199,11 +200,9 @@ do -- owner
 	end
 
 	function PART:GetParentOwner()
-
 		if self.TargetEntity:IsValid() and self.TargetEntity ~= self then
 			return self.TargetEntity:GetOwner()
 		end
-
 
 		for _, parent in ipairs(self:GetParentList()) do
 
@@ -218,8 +217,10 @@ do -- owner
 				end
 			end
 
-			local owner = parent:GetOwner()
-			if owner:IsValid() then return owner end
+			if parent ~= self then
+				local owner = parent:GetOwner()
+				if owner:IsValid() then return owner end
+			end
 		end
 
 		return NULL
@@ -908,29 +909,43 @@ do -- serializing
 			end
 		end
 
-		local function make_copy(tbl, pepper)
+		local function make_copy(tbl, pepper, uid_list)
 			if pepper == true then
 				pepper = tostring(math_random()) .. tostring(math_random())
 			end
 
-			for key, val in pairs(tbl.self) do
-				if key == "UniqueID" or key:sub(-3) == "UID" then
-					tbl.self[key] = pac.Hash(val .. pepper)
-				end
-			end
+			uid_list = uid_list or {}
+			tbl.self.UniqueID = pac.Hash(tbl.self.UniqueID .. pepper)
+			uid_list[tostring(tbl.self.UniqueID)] = tbl.self
 
 			for _, child in ipairs(tbl.children) do
-				make_copy(child, pepper)
+				make_copy(child, pepper, uid_list)
 			end
 
-			return tbl
+			return tbl, pepper, uid_list
+		end
+
+		local function update_uids(uid_list, pepper)
+			for uid, part in pairs(uid_list) do
+				for key, val in pairs(part) do
+					if (key:sub(-3) == "UID") then
+						local new_uid = pac.Hash(val .. pepper)
+
+						if uid_list[tostring(new_uid)] then
+							part[key] = new_uid
+						end
+					end
+				end
+			end
 		end
 
 		function PART:SetTable(tbl, copy_id, level)
 			level = level or 0
 
 			if copy_id then
-				tbl = make_copy(table.Copy(tbl), copy_id)
+				local pepper, uid_list
+				tbl, pepper, uid_list = make_copy(table.Copy(tbl), copy_id)
+				update_uids(uid_list, pepper)
 			end
 
 			local ok, err = xpcall(SetTable, on_error, self, tbl, level)

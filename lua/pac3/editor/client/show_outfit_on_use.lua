@@ -1,12 +1,26 @@
-
-local pac_onuse_only = CreateClientConVar('pac_onuse_only', '0', true, false, 'Enable "on +use only" mode. Within this mode, outfits are not being actually "loaded" until you hover over player and press your use button')
 local L = pace.LanguageString
 local MAX_DIST = 270
+local input_LookupBinding = input.LookupBinding
+local string_upper = string.upper
+
+local pac_onuse_only = CreateClientConVar("pac_onuse_only", "0", true, false, 'Enable "on +use only" mode. Within this mode, outfits are not being actually "loaded" until you hover over player and press your use button')
+local pac_onuse_only_override = CreateClientConVar("pac_onuse_only_override", "0", true, false, "Ignore value of pac_onuse_only_force")
+local pac_onuse_only_force = CreateConVar("pac_onuse_only_force", "0", FCVAR_REPLICATED, "Sets pac_onuse_only for clients")
+
+function pac.IsPacOnUseOnly()
+	if pac_onuse_only_override:GetBool() then
+		return pac_onuse_only:GetBool()
+	end
+
+	return pac_onuse_only_force:GetBool() or pac_onuse_only:GetBool()
+end
+
+local pac_IsPacOnUseOnly = pac.IsPacOnUseOnly
 
 hook.Add("PlayerBindPress", "pac_onuse_only", function(ply, bind, isPressed)
 	if bind ~= "use" and bind ~= "+use" then return end
 	if bind ~= "+use" and isPressed then return end
-	if not pac_onuse_only:GetBool() then return end
+	if not pac_IsPacOnUseOnly() then return end
 	local eyes, aim = ply:EyePos(), ply:GetAimVector()
 
 	local tr = util.TraceLine({
@@ -33,8 +47,8 @@ do
 		weight = 600,
 	})
 
-	hook.Add("HUDPaint", "pac_onuse_only", function(ply, bind, isPressed)
-		if not pac_onuse_only:GetBool() then return end
+	hook.Add("HUDPaint", "pac_onuse_only", function()
+		if not pac_IsPacOnUseOnly() then return end
 		local ply = pac.LocalPlayer
 		local eyes, aim = ply:EyePos(), ply:GetAimVector()
 
@@ -50,12 +64,12 @@ do
 
 		if lastDisplayLabel < RealTime() then return end
 
-		local alpha = (lastDisplayLabel - RealTime()) / 3
-		draw.DrawText(L"Press +use to reveal PAC3 outfit", "pac_onuse_only_hint", ScrW() / 2, ScrH() * 0.3, Color(255, 255, 255, alpha * 255), TEXT_ALIGN_CENTER)
+		local alpha = (lastDisplayLabel - RealTime()) / 2
+		local key = string_upper( input_LookupBinding( "use" ) or "use" )
+		local text = "Press " .. key .. " to reveal this persons PAC3 outfit"
+		draw.DrawText(L(text), "pac_onuse_only_hint", ScrW() / 2, ScrH() * 0.3, Color(255, 255, 255, alpha * 255), TEXT_ALIGN_CENTER)
 	end)
 end
-
-local pac_onuse_only = CreateClientConVar('pac_onuse_only', '0', true, false, 'Enable "on +use only" mode. Within this mode, outfits are not being actually "loaded" until you hover over player and press your use button')
 
 function pace.OnUseOnlyUpdates(cvar, ...)
 	hook.Call('pace_OnUseOnlyUpdates', nil, ...)
@@ -68,7 +82,7 @@ concommand.Add("pac_onuse_reset", function()
 		if ent.pac_onuse_only then
 			ent.pac_onuse_only_check = true
 
-			if pac_onuse_only:GetBool() then
+			if pac_IsPacOnUseOnly() then
 				pac.ToggleIgnoreEntity(ent, ent.pac_onuse_only_check, 'pac_onuse_only')
 			else
 				pac.ToggleIgnoreEntity(ent, false, 'pac_onuse_only')
@@ -99,7 +113,7 @@ function pace.HandleOnUseReceivedData(data)
 		-- if TRUE - hide outfit
 		data.owner.pac_onuse_only_check = true
 
-		if pac_onuse_only:GetBool() then
+		if pac_IsPacOnUseOnly() then
 			pac.ToggleIgnoreEntity(data.owner, data.owner.pac_onuse_only_check, 'pac_onuse_only')
 		else
 			pac.ToggleIgnoreEntity(data.owner, false, 'pac_onuse_only')
@@ -109,7 +123,7 @@ function pace.HandleOnUseReceivedData(data)
 	-- behaviour of this (if one of entities on this hook becomes invalid)
 	-- is undefined if DLib is not installed, but anyway
 	hook.Add('pace_OnUseOnlyUpdates', data.owner, function()
-		if pac_onuse_only:GetBool() then
+		if pac_IsPacOnUseOnly() then
 			pac.ToggleIgnoreEntity(data.owner, data.owner.pac_onuse_only_check, 'pac_onuse_only')
 		else
 			pac.ToggleIgnoreEntity(data.owner, false, 'pac_onuse_only')

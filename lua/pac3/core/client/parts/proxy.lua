@@ -195,9 +195,10 @@ end
 PART.Inputs = {}
 
 PART.Inputs.property = function(self, property_name, field)
-	local part = self:GetTarget()
 
-	if part:IsValid() and property_name then
+	local part = self.TargetEntity:IsValid() and self.TargetEntity or self:GetParent()
+
+	if part:IsValid() and part.GetProperty and property_name then
 		local v = part:GetProperty(property_name)
 
 		local T = type(v)
@@ -228,6 +229,42 @@ PART.Inputs.owner_position = function(self)
 	end
 
 	return 0,0,0
+end
+
+PART.Inputs.owner_position_x = function(self)
+	local owner = get_owner(self)
+
+	if owner:IsValid() then
+		local pos = owner:GetPos()
+
+		return pos.x
+	end
+
+	return 0
+end
+
+PART.Inputs.owner_position_y = function(self)
+	local owner = get_owner(self)
+
+	if owner:IsValid() then
+		local pos = owner:GetPos()
+
+		return pos.y
+	end
+
+	return 0
+end
+
+PART.Inputs.owner_position_z = function(self)
+	local owner = get_owner(self)
+
+	if owner:IsValid() then
+		local pos = owner:GetPos()
+
+		return pos.z
+	end
+
+	return 0
 end
 
 PART.Inputs.owner_fov = function(self)
@@ -515,15 +552,28 @@ PART.Inputs.pose_parameter = function(self, name)
 	return 0
 end
 
-PART.Inputs.command = function(self)
+PART.Inputs.pose_parameter_true = function(self, name)
+	if not name then return 0 end
+	local owner = get_owner(self)
+	if owner:IsValid() then
+		min,max = owner:GetPoseParameterRange(owner:LookupPoseParameter(name))
+		actual_value = min + (max - min)*(owner:GetPoseParameter(name))
+		return actual_value
+	else end
+	return 0
+end
+
+PART.Inputs.command = function(self, name)
 	local ply = self:GetPlayerOwner()
 	if ply.pac_proxy_events then
-		local data = ply.pac_proxy_events[self.Name]
+		local data
+		if not name then data = ply.pac_proxy_events[self.Name]
+		else data = ply.pac_proxy_events[name] end
+
 		if data then
 			data.x = data.x or 0
 			data.y = data.y or 0
 			data.z = data.z or 0
-
 			return data.x, data.y, data.z
 		end
 	end
@@ -533,6 +583,7 @@ end
 
 PART.Inputs.voice_volume = function(self)
 	local ply = self:GetPlayerOwner()
+	if not IsValid(ply) then return 0 end
 	return ply:VoiceVolume()
 end
 
@@ -606,12 +657,30 @@ do -- health and armor
 
 		return owner:GetMaxHealth()
 	end
+	PART.Inputs.owner_health_fraction = function(self)
+		local owner = self:GetPlayerOwner()
+		if not owner:IsValid() then return 0 end
+
+		return owner:Health() / owner:GetMaxHealth()
+	end
 
 	PART.Inputs.owner_armor = function(self)
 		local owner = self:GetPlayerOwner()
 		if not owner:IsValid() then return 0 end
 
 		return owner:Armor()
+	end
+	PART.Inputs.owner_max_armor = function(self)
+		local owner = self:GetPlayerOwner()
+		if not owner:IsValid() then return 0 end
+
+		return owner:GetMaxArmor()
+	end
+	PART.Inputs.owner_armor_fraction = function(self)
+		local owner = self:GetPlayerOwner()
+		if not owner:IsValid() then return 0 end
+
+		return owner:Armor() / owner:GetMaxArmor()
 	end
 end
 
@@ -752,6 +821,38 @@ do
 		if not self.feedback then return 0 end
 		return self.feedback[3] or 0
 	end
+end
+
+PART.Inputs.flat_dot_forward = function(self)
+	local part = get_owner(self)
+
+	if part:IsValid() then
+		local ang = part:IsPlayer() and part:EyeAngles() or part:GetAngles()
+		ang.p = 0
+		ang.r = 0
+		local dir = pac.EyePos - part:EyePos()
+		dir[3] = 0
+		dir:Normalize()
+		return dir:Dot(ang:Forward())
+	end
+
+	return 0
+end
+
+PART.Inputs.flat_dot_right = function(self)
+	local part = get_owner(self)
+
+	if part:IsValid() then
+		local ang = part:IsPlayer() and part:EyeAngles() or part:GetAngles()
+		ang.p = 0
+		ang.r = 0
+		local dir = pac.EyePos - part:EyePos()
+		dir[3] = 0
+		dir:Normalize()
+		return dir:Dot(ang:Right())
+	end
+
+	return 0
 end
 
 net.Receive("pac_proxy", function()
@@ -1003,7 +1104,13 @@ function PART:OnThink()
 		local input_function = self.Inputs[self.Input]
 
 		if post_function and input_function then
-			local input_number = input_function(self)
+			local ran, err = pcall( input_function, self )
+
+			if not ran then
+				error("proxy function " .. tostring( self.Input ) .. " | " .. tostring( self.Function ) .. " | " .. tostring( self ) .. " failed: " .. err)
+			end
+
+			local input_number = err
 
 			if not isnumber(input_number) then
 				error("proxy function " .. self.Input .. " does not return a number!")

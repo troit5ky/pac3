@@ -24,6 +24,7 @@ BUILDER:SetPropertyGroup("generic")
 	BUILDER:GetSet("HideBullets", false)
 	BUILDER:GetSet("HidePhysgunBeam", false)
 	BUILDER:GetSet("UseLegacyScale", false)
+	BUILDER:GetSet("GrabEarAnimation", true)
 	BUILDER:GetSet("BloodColor", "red", {enums = blood_colors})
 
 BUILDER:SetPropertyGroup("behavior")
@@ -56,7 +57,7 @@ function BUILDER:EntityField(name, field)
 end
 
 BUILDER:EntityField("InverseKinematics", "enable_ik")
-BUILDER:EntityField("MuteFootsteps", "hide_weapon")
+BUILDER:EntityField("MuteFootsteps", "mute_footsteps")
 BUILDER:EntityField("AnimationRate", "global_animation_rate")
 BUILDER:EntityField("FallApartOnDeath", "death_physics_parts")
 BUILDER:EntityField("DeathRagdollizeParent", "death_ragdollize")
@@ -131,6 +132,15 @@ function PART:SetBloodColor(str)
 	local ent = self:GetActualOwner()
 	if ent:IsValid() then
 		pac.emut.MutateEntity(self:GetPlayerOwner(), "blood_color", ent, blood_colors[self.BloodColor == "" and "red" or self.BloodColor])
+	end
+end
+
+function PART:SetGrabEarAnimation(b)
+	self.GrabEarAnimation = b
+
+	local ent = self:GetActualOwner()
+	if ent:IsValid() then
+		ent.pac_disable_ear_grab = not b
 	end
 end
 
