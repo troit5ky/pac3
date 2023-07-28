@@ -1,6 +1,7 @@
 local Vector = Vector
 local Matrix = Matrix
 local isstring = isstring
+local Clamp = math.Clamp
 
 do -- table copy
 	local lookup_table
@@ -503,7 +504,7 @@ function pac.SetModelScale(ent, scale, size, legacy_scale)
 		if scale then
 			mat = Matrix()
 
-			local x,y,z = scale.x, scale.y, scale.z
+			local x,y,z = Clamp(scale.x, -1000, 1000), Clamp(scale.y, -1000, 1000), Clamp(scale.z, -1000, 1000)
 			--local x,y,z = ent.pac_model_scale.x, ent.pac_model_scale.y, ent.pac_model_scale.z
 
 			mat:Scale(Vector(x,y,z))
